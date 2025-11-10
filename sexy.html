@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>🎧 Rádio Tatuapé FM - Gerador de Voz Feminina</title>
+  <style>
+    body {
+      background: linear-gradient(145deg, #0d0d0d, #1a1a1a);
+      color: #e0e0e0;
+      font-family: "Segoe UI", sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 30px;
+    }
+    h1 {
+      color: #00ff9d;
+      margin-bottom: 20px;
+    }
+    textarea {
+      width: 80%;
+      height: 150px;
+      background: #222;
+      color: #fff;
+      border: 2px solid #00ff9d;
+      border-radius: 8px;
+      padding: 10px;
+      font-size: 1rem;
+      resize: none;
+    }
+    select {
+      margin-top: 10px;
+      width: 82%;
+      background: #222;
+      color: #00ff9d;
+      border: 2px solid #00ff9d;
+      border-radius: 8px;
+      padding: 10px;
+      font-size: 1rem;
+    }
+    button {
+      margin: 10px;
+      padding: 10px 20px;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      cursor: pointer;
+      color: #fff;
+      background: #00b87c;
+      transition: 0.3s;
+    }
+    button:hover {
+      background: #00ff9d;
+      color: #111;
+    }
+    .log {
+      width: 80%;
+      margin-top: 20px;
+      background: #1b1b1b;
+      padding: 15px;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      overflow-y: auto;
+      max-height: 300px;
+    }
+  </style>
+</head>
+<body>
+  <h1>🎙️ Rádio Tatuapé FM – Voz Feminina Sedutora</h1>
+
+  <textarea id="inputFrases" placeholder="Digite uma frase por linha..."></textarea><br>
+  <select id="vozSelect">
+    <option value="">🔍 Carregando vozes disponíveis...</option>
+  </select><br>
+
+  <button onclick="falarTodas()">▶️ Ler e Gerar MP3</button>
+  <button onclick="adicionarFrasesGemini()">✨ Gerar Frases com Gemini</button>
+  <button onclick="limpar()">🧹 Limpar</button>
+
+  <div class="log" id="log"></div>
+
+  <script>
+    const logDiv = document.getElementById("log");
+    const vozSelect = document.getElementById("vozSelect");
+    const API_KEY = "AIzaSyBc3gAqms0gs2zq4TMwK0p11rW6OLOsp4k";
+    const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
+
+    function log(msg) {
+      logDiv.innerHTML += `<div>${msg}</div>`;
+      logDiv.scrollTop = logDiv.scrollHeight;
+    }
+
+    // === Carregar e listar vozes disponíveis ===
+    function carregarVozes() {
+      const voices = speechSynthesis.getVoices();
+      vozSelect.innerHTML = "";
+      voices.forEach(v => {
+        const option = document.createElement("option");
+        option.value = v.name;
+        option.textContent = `${v.name} (${v.lang})`;
+        vozSelect.appendChild(option);
+      });
+
+      // Seleciona automaticamente a voz feminina brasileira se existir
+      const vozBR = voices.find(v => v.lang.startsWith("pt-BR") && v.name.toLowerCase().includes("female"));
+      if (vozBR) vozSelect.value = vozBR.name;
+    }
+
+    speechSynthesis.onvoiceschanged = carregarVozes;
+
+    // === Função principal de fala ===
+    async function falarTodas() {
+      const frases = document.getElementById("inputFrases").value.split("\n").filter(f => f.trim() !== "");
+      if (frases.length === 0) return alert("Digite ao menos uma frase.");
+
+      for (let i = 0; i < frases.length; i++) {
+        const frase = frases[i];
+        log(`<b>Lendo:</b> ${frase}`);
+        await falar(frase, i + 1);
+      }
+      log("<b>Todas as frases foram lidas e salvas como MP3.</b>");
+    }
+
+    function falar(frase, index) {
+      return new Promise(resolve => {
+        const utter = new SpeechSynthesisUtterance(frase);
+        utter.lang = "pt-BR";
+        utter.rate = 0.9;
+        utter.pitch = 0.9;
+        utter.volume = 1.0;
+
+        const vozEscolhida = vozSelect.value;
+        const voices = speechSynthesis.getVoices();
+        utter.voice = voices.find(v => v.name === vozEscolhida) || voices[0];
+
+        // === Geração e gravação ===
+        const audioContext = new AudioContext();
+        const dest = audioContext.createMediaStreamDestination();
+        const mediaRecorder = new MediaRecorder(dest.stream);
+        const chunks = [];
+
+        mediaRecorder.ondataavailable = e => chunks.push(e.data);
+        mediaRecorder.onstop = () => {
+          const blob = new Blob(chunks, { type: "audio/mp3" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `comentario_${String(index).padStart(3, "0")}.mp3`;
+          a.click();
+          resolve();
+        };
+
+        utter.onstart = () => mediaRecorder.start();
+        utter.onend = () => {
+          setTimeout(() => mediaRecorder.stop(), 400);
+        };
+
+        speechSynthesis.speak(utter);
+      });
+    }
+
+    // === Gerar frases via Gemini ===
+    async function adicionarFrasesGemini() {
+      log("Gerando novas frases com a IA Gemini...");
+      try {
+        const body = {
+          contents: [
+            {
+              parts: [
+                {
+                  text: `Crie 5 frases criativas, profissionais e entusiasmadas sobre a Rádio Tatuapé FM, em tom de locução, curtas e inteligentes.`
+                }
+              ]
+            }
+          ]
+        };
+
+        const res = await fetch(GEMINI_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-goog-api-key": API_KEY
+          },
+          body: JSON.stringify(body)
+        });
+
+        const data = await res.json();
+        const texto = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+        document.getElementById("inputFrases").value += "\n" + texto.replace(/[\*\-]/g, "").trim();
+        log("✅ Frases adicionadas com sucesso!");
+      } catch (e) {
+        log("❌ Erro ao gerar frases com Gemini: " + e.message);
+      }
+    }
+
+    function limpar() {
+      document.getElementById("inputFrases").value = "";
+      logDiv.innerHTML = "";
+    }
+  </script>
+</body>
+</html>
